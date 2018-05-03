@@ -30,8 +30,8 @@
 #include <vcg/space/point4.h>
 #include <vector>
 #include <iostream>
-#include <eigenlib/Eigen/Core>
-#include <eigenlib/Eigen/LU>
+#include <Eigen/Core>
+#include <Eigen/LU>
 
 namespace vcg {
 
@@ -149,7 +149,7 @@ public:
     void ToEulerAngles(T &alpha, T &beta, T &gamma);
 
     template <class Matrix44Type>
-    void FromMatrix(const Matrix44Type & m){for(int i = 0; i < 16; i++) V()[i]=m.V()[i];}
+    void FromMatrix(const Matrix44Type & m){for(int i = 0; i < 16; i++) V()[i]=T(m.V()[i]);}
 
     template <class EigenMatrix44Type>
     void ToEigenMatrix(EigenMatrix44Type & m) const {

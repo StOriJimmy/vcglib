@@ -125,7 +125,7 @@ static void VertexCoordLaplacianAngleWeighted(MeshType &m, int step, ScalarType 
 // Note the delta parameter is in a absolute unit
 // to get stability it should be a small percentage of the shortest edge.
 
-static void VertexCoordScaleDependentLaplacian_Fujiwara(MeshType &m, int step, ScalarType delta)
+static void VertexCoordScaleDependentLaplacian_Fujiwara(MeshType &m, int step, ScalarType delta,bool SmoothSelected=false)
 {
     SimpleTempData<typename MeshType::VertContainer, ScaleLaplacianInfo > TD(m.vert);
     ScaleLaplacianInfo lpz;
@@ -181,7 +181,10 @@ static void VertexCoordScaleDependentLaplacian_Fujiwara(MeshType &m, int step, S
 
             for(vi=m.vert.begin();vi!=m.vert.end();++vi)
                 if(!(*vi).IsD() && TD[*vi].LenSum>0 )
-                 (*vi).P() = (*vi).P() + (TD[*vi].PntSum/TD[*vi].LenSum)*delta;
+                {
+                    if(!SmoothSelected || (*vi).IsS())
+                        (*vi).P() = (*vi).P() + (TD[*vi].PntSum/TD[*vi].LenSum)*delta;
+                }
     }
 };
 
@@ -258,73 +261,67 @@ static void AccumulateLaplacianInfo(MeshType &m, SimpleTempData<typename MeshTyp
 
 static void VertexCoordLaplacian(MeshType &m, int step, bool SmoothSelected=false, bool cotangentWeight=false, vcg::CallBackPos * cb=0)
 {
-  VertexIterator vi;
-    LaplacianInfo lpz(CoordType(0,0,0),0);
-    SimpleTempData<typename MeshType::VertContainer,LaplacianInfo > TD(m.vert,lpz);
-    for(int i=0;i<step;++i)
-        {
-            if(cb)cb(100*i/step, "Classic Laplacian Smoothing");
-            TD.Init(lpz);
-            AccumulateLaplacianInfo(m,TD,cotangentWeight);
-            for(vi=m.vert.begin();vi!=m.vert.end();++vi)
-                if(!(*vi).IsD() && TD[*vi].cnt>0 )
-                {
-                            if(!SmoothSelected || (*vi).IsS())
-                                    (*vi).P() = ( (*vi).P() + TD[*vi].sum)/(TD[*vi].cnt+1);
-                }
-        }
+  LaplacianInfo lpz(CoordType(0,0,0),0);
+  SimpleTempData<typename MeshType::VertContainer,LaplacianInfo > TD(m.vert,lpz);
+  for(int i=0;i<step;++i)
+  {
+    if(cb)cb(100*i/step, "Classic Laplacian Smoothing");
+    TD.Init(lpz);
+    AccumulateLaplacianInfo(m,TD,cotangentWeight);
+    for(auto vi=m.vert.begin();vi!=m.vert.end();++vi)
+      if(!(*vi).IsD() && TD[*vi].cnt>0 )
+      {
+        if(!SmoothSelected || (*vi).IsS())
+          (*vi).P() = ( (*vi).P() + TD[*vi].sum)/(TD[*vi].cnt+1);
+      }
+  }
 }
 
 // Same of above but moves only the vertices that do not change FaceOrientation more that the given threshold
 static void VertexCoordPlanarLaplacian(MeshType &m, int step, float AngleThrRad = math::ToRad(1.0), bool SmoothSelected=false, vcg::CallBackPos * cb=0)
 {
-  VertexIterator vi;
-    FaceIterator fi;
-    LaplacianInfo lpz(CoordType(0,0,0),0);
-    SimpleTempData<typename MeshType::VertContainer,LaplacianInfo > TD(m.vert,lpz);
-    for(int i=0;i<step;++i)
-        {
-        if(cb)cb(100*i/step, "Planar Laplacian Smoothing");
-        TD.Init(lpz);
-        AccumulateLaplacianInfo(m,TD);
-        for(vi=m.vert.begin();vi!=m.vert.end();++vi)
-            if(!(*vi).IsD() && TD[*vi].cnt>0 )
-            {
-                if(!SmoothSelected || (*vi).IsS())
-                    TD[*vi].sum = ( (*vi).P() + TD[*vi].sum)/(TD[*vi].cnt+1);
-            }
-
-        for(fi=m.face.begin();fi!=m.face.end();++fi){
-                if(!(*fi).IsD()){
-                    for (int j = 0; j < 3; ++j) {
-                        if(Angle( Normal(TD[(*fi).V0(j)].sum, (*fi).P1(j), (*fi).P2(j) ),
-                                            Normal(   (*fi).P0(j)     , (*fi).P1(j), (*fi).P2(j) ) ) > AngleThrRad )
-                            TD[(*fi).V0(j)].sum = (*fi).P0(j);
-                    }
-                }
-            }
-            for(fi=m.face.begin();fi!=m.face.end();++fi){
-                if(!(*fi).IsD()){
-                    for (int j = 0; j < 3; ++j) {
-                        if(Angle( Normal(TD[(*fi).V0(j)].sum, TD[(*fi).V1(j)].sum, (*fi).P2(j) ),
-                                            Normal(   (*fi).P0(j)     ,    (*fi).P1(j),      (*fi).P2(j) ) ) > AngleThrRad )
-                        {
-                            TD[(*fi).V0(j)].sum = (*fi).P0(j);
-                            TD[(*fi).V1(j)].sum = (*fi).P1(j);
-                        }
-                    }
-                }
-            }
-
-            for(vi=m.vert.begin();vi!=m.vert.end();++vi)
-                if(!(*vi).IsD() && TD[*vi].cnt>0 )
-                        (*vi).P()= TD[*vi].sum;
-
-
-
-        }// end step
-
-
+  LaplacianInfo lpz(CoordType(0,0,0),0);
+  SimpleTempData<typename MeshType::VertContainer,LaplacianInfo > TD(m.vert,lpz);
+  for(int i=0;i<step;++i)
+  {
+    if(cb)cb(100*i/step, "Planar Laplacian Smoothing");
+    TD.Init(lpz);
+    AccumulateLaplacianInfo(m,TD);
+    // First normalize the AccumulateLaplacianInfo
+    for(auto vi=m.vert.begin();vi!=m.vert.end();++vi)
+      if(!(*vi).IsD() && TD[*vi].cnt>0 )
+      {
+        if(!SmoothSelected || (*vi).IsS())
+          TD[*vi].sum = ( (*vi).P() + TD[*vi].sum)/(TD[*vi].cnt+1);
+      }
+    
+    for(auto fi=m.face.begin();fi!=m.face.end();++fi){
+      if(!(*fi).IsD()){
+        for (int j = 0; j < 3; ++j) {
+          if(Angle( Normal(TD[(*fi).V0(j)].sum, (*fi).P1(j), (*fi).P2(j) ),
+                    Normal(   (*fi).P0(j)     , (*fi).P1(j), (*fi).P2(j) ) ) > AngleThrRad )
+            TD[(*fi).V0(j)].sum = (*fi).P0(j);
+        }
+      }
+    }
+    for(auto fi=m.face.begin();fi!=m.face.end();++fi){
+      if(!(*fi).IsD()){
+        for (int j = 0; j < 3; ++j) {
+          if(Angle( Normal(TD[(*fi).V0(j)].sum, TD[(*fi).V1(j)].sum, (*fi).P2(j) ),
+                    Normal(   (*fi).P0(j)     ,    (*fi).P1(j),      (*fi).P2(j) ) ) > AngleThrRad )
+          {
+            TD[(*fi).V0(j)].sum = (*fi).P0(j);
+            TD[(*fi).V1(j)].sum = (*fi).P1(j);
+          }
+        }
+      }
+    }
+    
+    for(auto vi=m.vert.begin();vi!=m.vert.end();++vi)
+      if(!(*vi).IsD() && TD[*vi].cnt>0 )
+        if(!SmoothSelected || (*vi).IsS())
+          (*vi).P()= TD[*vi].sum;
+  } // end step
 }
 
 static void VertexCoordLaplacianBlend(MeshType &m, int step, float alpha, bool SmoothSelected=false)
@@ -396,6 +393,44 @@ static void VertexCoordTaubin(MeshType &m, int step, float lambda, float mu, boo
                         {
                             CoordType Delta = TD[*vi].sum/TD[*vi].cnt - (*vi).P();
                             (*vi).P() = (*vi).P() + Delta*mu ;
+                        }
+                    }
+            } // end for step
+}
+
+static void VertexQualityTaubin(MeshType &m, int step, float lambda, float mu, bool SmoothSelected=false, vcg::CallBackPos * cb=0)
+{
+    SimpleTempData<typename MeshType::VertContainer,ScalarType > OldQ(m.vert,0);
+
+    VertexIterator vi;
+    for(int i=0;i<step;++i)
+        {
+            for (size_t i=0;i<m.vert.size();i++)
+                OldQ[i]=m.vert[i].Q();
+
+            if(cb) cb(100*i/step, "Taubin Smoothing");
+
+            VertexQualityLaplacian(m,1,SmoothSelected);
+
+            for(vi=m.vert.begin();vi!=m.vert.end();++vi)
+                {
+                    if(!SmoothSelected || (*vi).IsS())
+                    {
+                        ScalarType Delta = (*vi).Q() - OldQ[(*vi)];
+                        (*vi).Q() = OldQ[(*vi)] + Delta*lambda ;
+                    }
+                }
+
+            for (size_t i=0;i<m.vert.size();i++)
+                OldQ[i]=m.vert[i].Q();
+            VertexQualityLaplacian(m,1,SmoothSelected);
+
+            for(vi=m.vert.begin();vi!=m.vert.end();++vi)
+                    {
+                        if(!SmoothSelected || (*vi).IsS())
+                        {
+                            ScalarType Delta = m.vert[i].Q() -  OldQ[(*vi)];
+                            (*vi).Q() =  OldQ[(*vi)] + Delta*mu ;
                         }
                     }
             } // end for step
@@ -689,7 +724,7 @@ static void VertexQualityLaplacian(MeshType &m, int step=1, bool SmoothSelected=
         FaceIterator fi;
         for(fi=m.face.begin();fi!=m.face.end();++fi)
             if(!(*fi).IsD())
-                for(int j=0;j<3;++j)
+                for(int j=0;j<(*fi).VN();++j)
                     if(!(*fi).IsB(j))
                         {
                             TD[(*fi).V(j)].sum+=(*fi).V1(j)->Q();
@@ -701,7 +736,7 @@ static void VertexQualityLaplacian(MeshType &m, int step=1, bool SmoothSelected=
             // si azzaera i dati per i vertici di bordo
             for(fi=m.face.begin();fi!=m.face.end();++fi)
                 if(!(*fi).IsD())
-                    for(int j=0;j<3;++j)
+                    for(int j=0;j<(*fi).VN();++j)
                         if((*fi).IsB(j))
                             {
                                 TD[(*fi).V(j)]=lpz;
@@ -711,7 +746,7 @@ static void VertexQualityLaplacian(MeshType &m, int step=1, bool SmoothSelected=
             // se l'edge j e' di bordo si deve mediare solo con gli adiacenti
             for(fi=m.face.begin();fi!=m.face.end();++fi)
                 if(!(*fi).IsD())
-                    for(int j=0;j<3;++j)
+                    for(int j=0;j<(*fi).VN();++j)
                         if((*fi).IsB(j))
                             {
                                 TD[(*fi).V(j)].sum+=(*fi).V1(j)->Q();

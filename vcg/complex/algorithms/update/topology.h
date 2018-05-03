@@ -23,11 +23,6 @@
 
 #ifndef __VCG_TRI_UPDATE_TOPOLOGY
 #define __VCG_TRI_UPDATE_TOPOLOGY
-#include <algorithm>
-#include <vector>
-#include <vcg/simplex/face/pos.h>
-#include <vcg/simplex/face/topology.h>
-#include <vcg/simplex/edge/topology.h>
 
 namespace vcg {
 namespace tri {
@@ -434,13 +429,11 @@ static void TestVertexEdge(MeshType &m)
       if (!vi->IsD())
       {
         int cnt =0;
-        int ind = tri::Index(m,*vi);
-        int incidentNum = numVertex[ind];
         for(edge::VEIterator<EdgeType> vei(&*vi);!vei.End();++vei)
           cnt++;
         EdgeType *vep = vi->VEp();
-        assert((incidentNum==0) == (vi->VEp()==0) );
-        assert(cnt==incidentNum);        
+        assert((numVertex[tri::Index(m,*vi)] == 0) == (vi->VEp()==0) );
+        assert(cnt==numVertex[tri::Index(m,*vi)]);        
       }
   }  
 }

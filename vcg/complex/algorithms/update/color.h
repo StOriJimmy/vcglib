@@ -24,7 +24,6 @@
 #ifndef __VCG_TRI_UPDATE_COLOR
 #define __VCG_TRI_UPDATE_COLOR
 
-#include <limits>
 #include <math.h>
 #include <time.h>
 #include <vcg/space/color4.h>
@@ -448,7 +447,7 @@ static void PerVertexAddNoise(MeshType& m, int noiseBits, bool onSelected=false)
 
 /*! \brief Reduces vertex color the mesh to two colors according to a threshold.
   */
-static int PerVertexThresholding(MeshType &m, float threshold, Color4b c1 = Color4<unsigned char>::Black, Color4b c2 = Color4<unsigned char>::White, const bool ProcessSelected=false)
+static int PerVertexThresholding(MeshType &m, float threshold, const Color4b c1 = Color4<unsigned char>::Black, const Color4b c2 = Color4<unsigned char>::White, const bool ProcessSelected=false)
 {
   RequirePerVertexColor(m);
 
@@ -791,6 +790,7 @@ static Color4b ColorDesaturate(Color4b c, int method)
     }
     default: assert(0);
   }
+  return Color4b(255, 255, 255, 255);
 }
 
 //ausiliary function to compute average lightness. value = (R+G+B)/3

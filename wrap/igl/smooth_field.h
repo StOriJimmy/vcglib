@@ -25,7 +25,7 @@
 #define SMOOTHER_FIELD_H
 
 //eigen stuff
-#include <eigenlib/Eigen/Sparse>
+#include <Eigen/Sparse>
 
 //vcg stuff
 #include <vcg/complex/algorithms/update/color.h>
@@ -37,7 +37,7 @@
 #include <igl/n_polyvector.h>
 #include <igl/principal_curvature.h>
 #include <igl/igl_inline.h>
-#include <igl/comiso/nrosy.h>
+#include <igl/copyleft/comiso/nrosy.h>
 
 namespace vcg {
 namespace tri {
@@ -238,7 +238,7 @@ class FieldSmoother
         Eigen::MatrixXd output_field;
         Eigen::VectorXd output_sing;
 
-        igl::nrosy(V,F,HardI,HardD,SoftI,SoftW,SoftD,Ndir,alpha_soft,output_field,output_sing);
+        igl::copyleft::comiso::nrosy(V,F,HardI,HardD,SoftI,SoftW,SoftD,Ndir,alpha_soft,output_field,output_sing);
 
         //finally update the principal directions
         for (size_t i=0;i<mesh.face.size();i++)
@@ -341,11 +341,8 @@ public:
             Ndir=4;
             curvRing=2;
             alpha_curv=0.0;
-
             align_borders=false;
-
             SmoothM=SMMiq;
-
             sharp_thr=0.0;
             curv_thr=0.4;
         }
@@ -372,7 +369,7 @@ public:
             AddBorderConstraints(mesh);
 
         //aff final constraints
-        for (int i=0;i<SParam.AddConstr.size();i++)
+        for (size_t i=0;i<SParam.AddConstr.size();i++)
         {
             int indexF=SParam.AddConstr[i].first;
             CoordType dir=SParam.AddConstr[i].second;
@@ -391,7 +388,7 @@ public:
 
 
     static void InitByCurvature(MeshType & mesh,
-                                int Nring,
+                                unsigned Nring,
                                 bool UpdateFaces=true)
     {
 
@@ -488,10 +485,10 @@ public:
         //for the moment only cross and line field
 
         //initialize direction by curvature if needed
-        if ((SParam.alpha_curv>0)||
-             (SParam.sharp_thr>0)||
-             (SParam.curv_thr>0))
-            InitByCurvature(mesh,SParam.curvRing);
+//        if ((SParam.alpha_curv>0)||
+//             (SParam.sharp_thr>0)||
+//             (SParam.curv_thr>0))
+        InitByCurvature(mesh,SParam.curvRing);
 
         SelectConstraints(mesh,SParam);
         //then do the actual smooth

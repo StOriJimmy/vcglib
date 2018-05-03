@@ -28,11 +28,8 @@
 // VCG headers
 
 #include <vcg/math/histogram.h>
-#include <vcg/simplex/face/pos.h>
-#include <vcg/simplex/face/topology.h>
 #include <vcg/complex/algorithms/closest.h>
 #include <vcg/space/index/grid_static_ptr.h>
-#include <vcg/complex/algorithms/update/topology.h>
 #include <vcg/complex/algorithms/inertia.h>
 
 
@@ -43,14 +40,16 @@ class Stat
 {
 public:
   typedef StatMeshType MeshType;
+  typedef typename MeshType::ScalarType			ScalarType;
   typedef typename MeshType::VertexType     VertexType;
   typedef typename MeshType::VertexPointer  VertexPointer;
   typedef typename MeshType::VertexIterator VertexIterator;
-  typedef typename MeshType::ScalarType			ScalarType;
+  typedef typename MeshType::ConstVertexIterator ConstVertexIterator;
+  typedef typename MeshType::EdgeType       EdgeType;
+  typedef typename MeshType::EdgeIterator   EdgeIterator;
   typedef typename MeshType::FaceType       FaceType;
   typedef typename MeshType::FacePointer    FacePointer;
   typedef typename MeshType::FaceIterator   FaceIterator;
-  typedef typename MeshType::EdgeIterator   EdgeIterator;
   typedef typename MeshType::FaceContainer  FaceContainer;
   typedef typename vcg::Box3<ScalarType>  Box3Type;
 
@@ -100,6 +99,38 @@ public:
     return minmax;
   }
 
+  static ScalarType ComputePerFaceQualityAvg( MeshType & m)
+  {
+    tri::RequirePerFaceQuality(m);
+    ScalarType AvgQ = 0;
+
+    FaceIterator fi;
+    size_t num=0;
+    for(fi = m.face.begin(); fi != m.face.end(); ++fi)
+    {
+      if((*fi).IsD())continue;
+        AvgQ+= (*fi).Q();
+        num++;
+    }
+    return (AvgQ/(ScalarType)num);
+  }
+
+  static ScalarType ComputePerVertQualityAvg(const MeshType & m)
+  {
+    tri::RequirePerVertexQuality(m);
+    ScalarType AvgQ = 0;
+
+    ConstVertexIterator vi;
+    size_t num=0;
+    for(vi = m.vert.begin(); vi != m.vert.end(); ++vi)
+    {
+      if((*vi).IsD())continue;
+        AvgQ+= (*vi).cQ();
+        num++;
+    }
+    return (AvgQ/(ScalarType)num);
+  }
+
   static std::pair<ScalarType,ScalarType> ComputePerEdgeQualityMinMax( MeshType & m)
   {
     tri::RequirePerEdgeQuality(m);
@@ -131,7 +162,7 @@ public:
 	  for (vi = m.vert.begin(); vi != m.vert.end(); ++vi)
 	  if (!(*vi).IsD())
 	  {
-		  ScalarType weight = useQualityAsWeight ? (*vi).Q() : 1.0;
+		  ScalarType weight = useQualityAsWeight ? (*vi).Q() : 1.0f;
 		  accumulator[0] += (double)((*vi).P()[0] * weight);
 		  accumulator[1] += (double)((*vi).P()[1] * weight);
 		  accumulator[2] += (double)((*vi).P()[2] * weight);
@@ -181,7 +212,22 @@ public:
     return area/ScalarType(2.0);
   }
 
-  static void ComputePerVertexQualityDistribution( MeshType & m, Distribution<float> &h, bool selectionOnly = false)    // V1.0
+	static ScalarType ComputeBorderLength(MeshType & m)
+	{
+		RequireFFAdjacency(m);
+		ScalarType sum = 0;
+		tri::UpdateTopology<MeshType>::FaceFace(m);
+		ForEachFace(m, [&](FaceType &f) {
+			for (int k=0; k<f.VN(); k++)
+				if (face::IsBorder(f, k))
+				{
+					sum += Distance(f.cP(k), f.cP(1));
+				}
+		});
+		return sum;
+	}
+
+  static void ComputePerVertexQualityDistribution( MeshType & m, Distribution<ScalarType> &h, bool selectionOnly = false)    // V1.0
   {
     tri::RequirePerVertexQuality(m);
     for(VertexIterator vi = m.vert.begin(); vi != m.vert.end(); ++vi)
@@ -265,7 +311,7 @@ public:
     {
       if(!(*ei).IsD())
       {
-        h.Add(Distance<float>((*ei).V(0)->P(),(*ei).V(1)->P()));
+        h.Add(Distance<ScalarType>((*ei).V(0)->P(),(*ei).V(1)->P()));
       }
     }
   }
@@ -277,6 +323,14 @@ public:
     return h.Avg();
   }
 
+  static ScalarType ComputeEdgeLengthSum(MeshType & m)
+  {
+    ScalarType sum=0;
+    ForEachEdge(m, [&](EdgeType &e){
+      sum+=Distance(e.cP(0),e.cP(1));
+    });    
+    return sum;
+  }
   static void ComputeFaceEdgeLengthDistribution( MeshType & m, Distribution<float> &h, bool includeFauxEdge=false)
   {
     std::vector< typename tri::UpdateTopology<MeshType>::PEdge > edgeVec;
@@ -287,15 +341,16 @@ public:
       h.Add(Distance(edgeVec[i].v[0]->P(),edgeVec[i].v[1]->P()));
   }
 
-  static ScalarType ComputeFaceEdgeLengthAverage(MeshType & m)
+  static ScalarType ComputeFaceEdgeLengthAverage(MeshType & m, bool selected=false)
   {
     double sum=0;
     for(FaceIterator fi = m.face.begin(); fi != m.face.end(); ++fi)
       if(!(*fi).IsD())
-      {
-        for(int i=0;i<3;++i)
-          sum+=double(Distance(fi->P0(i),fi->P1(i)));
-      }
+        if(!selected || fi->IsS())
+        {
+          for(int i=0;i<3;++i)
+            sum+=double(Distance(fi->P0(i),fi->P1(i)));
+        }
     return sum/(m.fn*3.0);
   }
 

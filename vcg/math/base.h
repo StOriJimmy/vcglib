@@ -89,6 +89,7 @@ Edited Comments and GPL license
 #include <float.h>
 #include <math.h>
 #include <assert.h>
+#include <cmath>
 #include <limits>
 #include <algorithm>
 
@@ -179,7 +180,19 @@ inline SCALAR  Clamp( const SCALAR & val, const SCALAR& minval, const SCALAR& ma
 	return val;
 }
 
+template <class SCALAR>
+inline SCALAR Lerp(SCALAR a, SCALAR b, SCALAR lambda)
+{
+    return a * lambda + (1-lambda) * b;
+}
 
+template <class SCALAR>
+inline SCALAR ClampedLerp(SCALAR a, SCALAR b, SCALAR lambda)
+{
+  math::Clamp(lambda, (SCALAR)0, (SCALAR)1);
+  return a * lambda + (1-lambda) * b;
+}
+                   
 
 inline float   ToDeg(const float &a){return a*180.0f/float(M_PI);}
 inline float   ToRad(const float &a){return float(M_PI)*a/180.0f;}
@@ -196,7 +209,7 @@ template<class T> int IsNAN(T t) {    return _isnan(t) || (!_finite(t)); }
 #elif defined(__MINGW32__) // GCC
 template<class T> int IsNAN(T t) {    return std::isnan(t) || std::isinf(t); }
 #elif defined(__GNUC__) // GCC
-template<class T> int IsNAN(T t) {    return isnan(t) || isinf(t); }
+template<class T> int IsNAN(T t) {    return std::isnan(t) || std::isinf(t); }
 #else // generic
 
 template<class T> int IsNAN(T t)

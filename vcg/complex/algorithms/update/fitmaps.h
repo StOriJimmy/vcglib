@@ -27,17 +27,16 @@
 #include <vcg/math/histogram.h>
 
 #include <vcg/simplex/face/jumping_pos.h>
-#include <vcg/complex/algorithms/update/flag.h>
 #include <vcg/complex/algorithms/update/normal.h>
 #include <vcg/complex/algorithms/update/curvature.h>
 #include <vcg/complex/algorithms/update/topology.h>
 #include <vcg/complex/algorithms/update/bounding.h>
 #include "vcg/complex/algorithms/update/curvature_fitting.h"
 
-#include <eigenlib/Eigen/Core>
-#include <eigenlib/Eigen/QR>
-#include <eigenlib/Eigen/LU>
-#include <eigenlib/Eigen/SVD>
+#include <Eigen/Core>
+#include <Eigen/QR>
+#include <Eigen/LU>
+#include <Eigen/SVD>
 
 #include <vcg/complex/algorithms/nring.h>
 

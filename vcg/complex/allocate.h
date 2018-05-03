@@ -287,7 +287,6 @@ public:
             */
   static EdgeIterator AddEdges(MeshType &m, size_t n, PointerUpdater<EdgePointer> &pu)
   {
-    EdgeIterator last;
     if(n == 0) return m.edge.end();
     pu.Clear();
     if(m.edge.empty()) pu.oldBase=0;  // if the vector is empty we cannot find the last valid element
@@ -298,6 +297,9 @@ public:
 
     m.edge.resize(m.edge.size()+n);
     m.en+=int(n);
+    size_t siz=(size_t)(m.edge.size()-n);
+    EdgeIterator firstNewEdge = m.edge.begin();
+    advance(firstNewEdge,siz);
 
     typename std::set<typename MeshType::PointerToAttribute>::iterator ai;
     for(ai = m.edge_attr.begin(); ai != m.edge_attr.end(); ++ai)
@@ -314,22 +316,25 @@ public:
               if ((*fi).cFEp(i)!=0) pu.Update((*fi).FEp(i));
         }
 
-      if(HasVEAdjacency(m))
+      if(HasVEAdjacency(m)){
         for (VertexIterator vi=m.vert.begin(); vi!=m.vert.end(); ++vi)
           if(!(*vi).IsD())
             if ((*vi).cVEp()!=0) pu.Update((*vi).VEp());
-
+        for(EdgeIterator ei=m.edge.begin();ei!=firstNewEdge;++ei)
+          if(!(*ei).IsD())
+          {            
+            if ((*ei).cVEp(0)!=0) pu.Update((*ei).VEp(0));
+            if ((*ei).cVEp(1)!=0) pu.Update((*ei).VEp(1));
+          }        
+      }
+      
       if(HasHEAdjacency(m))
         for (HEdgeIterator hi=m.hedge.begin(); hi!=m.hedge.end(); ++hi)
           if(!(*hi).IsD())
             if ((*hi).cHEp()!=0) pu.Update((*hi).HEp());
     }
-    size_t siz=(size_t)(m.edge.size()-n);
-
-    last = m.edge.begin();
-    advance(last,siz);
-
-    return last;// deve restituire l'iteratore alla prima faccia aggiunta;
+    
+    return firstNewEdge;// deve restituire l'iteratore alla prima faccia aggiunta;
   }
 
   /** Function to add a single edge to the mesh. and initializing it with two VertexPointer
@@ -341,6 +346,17 @@ public:
     ei->V(1)=v1;
     return ei;
   }
+  
+  /** Function to add a single edge to the mesh. and initializing it with two indexes to the vertexes
+            */
+  static EdgeIterator AddEdge(MeshType &m, size_t v0, size_t v1)
+  {
+    assert(v0!=v1);
+    assert(v0>=0 && v0<m.vert.size());
+    assert(v1>=0 && v1<m.vert.size());
+    return AddEdge(m,&(m.vert[v0]),&(m.vert[v1]));
+  }
+  
 
   /** Function to add a face to the mesh and initializing it with the three given coords
             */
@@ -496,9 +512,9 @@ public:
   static FaceIterator AddFace(MeshType &m, size_t v0, size_t v1, size_t v2)
   {
     assert((v0!=v1) && (v1!=v2) && (v0!=v2));
-    assert(v0>=0 && v0<=m.vert.size());
-    assert(v1>=0 && v1<=m.vert.size());
-    assert(v2>=0 && v2<=m.vert.size());
+    assert(v0>=0 && v0<m.vert.size());
+    assert(v1>=0 && v1<m.vert.size());
+    assert(v2>=0 && v2<m.vert.size());
     return AddFace(m,&(m.vert[v0]),&(m.vert[v1]),&(m.vert[v2]));
   }
   /** Function to add a face to the mesh and initializing it with the three given coords
@@ -805,7 +821,6 @@ public:
     assert((int)pos==m.vn);
 
     PermutateVertexVector(m, pu);
-
   }
 
   /*! \brief Wrapper without the PointerUpdater. */
@@ -863,7 +878,7 @@ public:
             m.edge[ pu.remap[i] ].VEi(1) = m.edge[i].cVEi(1);
           }
         if(HasEEAdjacency(m))
-          if (m.edge[i].cEEp(0)!=0)
+//          if (m.edge[i].cEEp(0)!=0)
           {
             m.edge[ pu.remap[i] ].EEp(0) = m.edge[i].cEEp(0);
             m.edge[ pu.remap[i] ].EEi(0) = m.edge[i].cEEi(0);
@@ -1065,6 +1080,7 @@ public:
     h._sizeof = sizeof(ATTR_TYPE);
     h._padding = 0;
     h._handle =   new SimpleTempData<VertContainer,ATTR_TYPE>(m.vert);
+    h._type = typeid(ATTR_TYPE);
     m.attrn++;
     h.n_attr = m.attrn;
     std::pair < AttrIterator , bool> res =  m.vert_attr.insert(h);
@@ -1141,12 +1157,12 @@ public:
   template <class ATTR_TYPE>
   static
   void
-  ClearPerVertexAttribute( MeshType & m,typename MeshType::template PerVertexAttributeHandle<ATTR_TYPE> & h){
+  ClearPerVertexAttribute( MeshType & m,typename MeshType::template PerVertexAttributeHandle<ATTR_TYPE> & h, const  ATTR_TYPE & initVal = ATTR_TYPE()){
     typename std::set<PointerToAttribute > ::iterator i;
     for( i = m.vert_attr.begin(); i !=  m.vert_attr.end(); ++i)
       if( (*i)._handle == h._handle ){
         for(typename MeshType::VertexIterator vi = m.vert.begin(); vi != m.vert.end(); ++vi)
-          h[vi] = ATTR_TYPE();
+          h[vi] = initVal;
         return;}
     assert(0);
   }
@@ -1206,6 +1222,7 @@ public:
     h._padding = 0;
     //		h._typename = typeid(ATTR_TYPE).name();
     h._handle =  new SimpleTempData<EdgeContainer,ATTR_TYPE>(m.edge);
+    h._type = typeid(ATTR_TYPE);
     m.attrn++;
     h.n_attr = m.attrn;
     std::pair < AttrIterator , bool> res =  m.edge_attr.insert(h);
@@ -1329,6 +1346,7 @@ public:
     h._sizeof = sizeof(ATTR_TYPE);
     h._padding = 0;
     h._handle =   new SimpleTempData<FaceContainer,ATTR_TYPE>(m.face);
+    h._type = typeid(ATTR_TYPE);
     m.attrn++;
     h.n_attr = m.attrn;
     std::pair < AttrIterator , bool> res =  m.face_attr.insert(h);
@@ -1447,6 +1465,7 @@ public:
     h._sizeof = sizeof(ATTR_TYPE);
     h._padding = 0;
     h._handle =  new Attribute<ATTR_TYPE>();
+    h._type = typeid(ATTR_TYPE);
     m.attrn++;
     h.n_attr = m.attrn;
     std::pair < AttrIterator , bool> res =  m.mesh_attr.insert(h);

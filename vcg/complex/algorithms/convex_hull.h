@@ -25,8 +25,7 @@
 
 #include <queue>
 #include <unordered_map>
-#include <algorithm>
-#include <vcg/complex/allocate.h>
+#include <vcg/complex/complex.h>
 #include <vcg/complex/algorithms/clean.h>
 
 namespace vcg
@@ -399,7 +398,7 @@ public:
      {
        visible.vert[i].P() = m.vert[ind].P();
        m.vert[ind].SetS();
-       m.vert[ind].C() = Color4b::LightBlue;
+       //m.vert[ind].C() = Color4b::LightBlue;
        selCnt++;
      }
    }
@@ -417,6 +416,8 @@ public:
 
    tri::Allocator<CHMesh>::CompactEveryVector(visible);
    tri::Clean<CHMesh>::FlipMesh(visible);
+   tri::UpdateNormal<CHMesh>::PerFaceNormalized(visible);
+   tri::UpdateNormal<CHMesh>::PerVertexNormalized(visible);
 
  }
 };

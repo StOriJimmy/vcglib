@@ -23,8 +23,6 @@
 #ifndef __VCG_TRI_UPDATE_FLAGS
 #define __VCG_TRI_UPDATE_FLAGS
 
-#include <vcg/simplex/face/pos.h>
-
 namespace vcg {
 namespace tri {
 /// \ingroup trimesh
@@ -443,6 +441,7 @@ public:
     FaceFauxSignedCrease(m,-AngleRad,AngleRad);
   }
 
+ 
 }; // end class
 
 }	// End namespace tri

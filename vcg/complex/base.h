@@ -37,10 +37,12 @@ public:
     int _padding;						// padding 	(used only with VMI loading)
 
     int n_attr;							// unique ID of the attribute
-
+    std::type_index _type;
     void Resize(size_t sz){((SimpleTempDataBase *)_handle)->Resize(sz);}
     void Reorder(std::vector<size_t> & newVertIndex){((SimpleTempDataBase *)_handle)->Reorder(newVertIndex);}
     bool operator<(const  PointerToAttribute    b) const {	return(_name.empty()&&b._name.empty())?(_handle < b._handle):( _name < b._name);}
+
+    PointerToAttribute(): _type(typeid(void)) { };
 };
 
 
@@ -637,10 +639,20 @@ bool HasPerMeshAttribute(const MeshType &m,   std::string   name){
         return (ai!= m.mesh_attr.end() ) ;
 }
 
-template <class MeshType> void RequireCompactness    (MeshType &m) {
-  if(m.vert.size()!=size_t(m.vn)) throw vcg::MissingCompactnessException("Vertex Vector Contains deleted elements");
-  if(m.edge.size()!=size_t(m.en)) throw vcg::MissingCompactnessException("Edge Vector Contains deleted elements");
+template <class MeshType> void RequireVertexCompactness (MeshType &m) {
+    if(m.vert.size()!=size_t(m.vn)) throw vcg::MissingCompactnessException("Vertex Vector Contains deleted elements");
+}
+template <class MeshType> void RequireFaceCompactness   (MeshType &m) {
   if(m.face.size()!=size_t(m.fn)) throw vcg::MissingCompactnessException("Face Vector Contains deleted elements");
+}
+template <class MeshType> void RequireEdgeCompactness   (MeshType &m) {
+	if(m.edge.size()!=size_t(m.en)) throw vcg::MissingCompactnessException("Edge Vector Contains deleted elements");
+}
+
+template <class MeshType> void RequireCompactness       (MeshType &m) {
+	RequireVertexCompactness<MeshType>(m);
+	RequireFaceCompactness<MeshType>  (m);
+	RequireEdgeCompactness<MeshType>  (m);
 }
 
 template <class MeshType> void RequireTriangularMesh (MeshType &m ) { if( tri::HasPolyInfo( m ) ) throw vcg::MissingTriangularRequirementException("");}

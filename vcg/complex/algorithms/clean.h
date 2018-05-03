@@ -24,18 +24,14 @@
 #ifndef __VCGLIB_CLEAN
 #define __VCGLIB_CLEAN
 
+#include <unordered_set>
+
 // VCG headers
 #include <vcg/complex/complex.h>
-#include <vcg/simplex/face/pos.h>
-#include <vcg/simplex/face/topology.h>
-#include <vcg/simplex/edge/topology.h>
 #include <vcg/complex/algorithms/closest.h>
 #include <vcg/space/index/grid_static_ptr.h>
 #include <vcg/space/index/spatial_hashing.h>
-#include <vcg/complex/algorithms/update/selection.h>
-#include <vcg/complex/algorithms/update/flag.h>
 #include <vcg/complex/algorithms/update/normal.h>
-#include <vcg/complex/algorithms/update/topology.h>
 #include <vcg/space/triangle3.h>
 
 namespace vcg {
@@ -61,7 +57,7 @@ public:
   {
     FacePointer fpt=sf.top();
     sf.pop();
-    for(int j=0;j<3;++j)
+    for(int j=0; j<fpt->VN(); ++j)
       if( !face::IsBorder(*fpt,j) )
       {
         FacePointer l=fpt->FFp(j);
@@ -316,41 +312,38 @@ public:
   }
 
 
-  /** This function removes that are not referenced by any face. The function updates the vn counter.
+  /** This function removes vertices that are not referenced by any face or by any edge.
             @param m The mesh
+            @param DeleteVertexFlag if false prevent the vertex deletion and just count it.
             @return The number of removed vertices
             */
   static int RemoveUnreferencedVertex( MeshType& m, bool DeleteVertexFlag=true)   // V1.0
   {
-    FaceIterator fi;
-    EdgeIterator ei;
-    VertexIterator vi;
-    int referredBit = VertexType::NewBitFlag();
-
-    int j;
+    tri::RequirePerVertexFlags(m);
+    
+    std::vector<bool> referredVec(m.vert.size(),false);
     int deleted = 0;
 
-    for(vi=m.vert.begin();vi!=m.vert.end();++vi)
-      (*vi).ClearUserBit(referredBit);
-
-    for(fi=m.face.begin();fi!=m.face.end();++fi)
+    for(auto fi=m.face.begin();fi!=m.face.end();++fi)
       if( !(*fi).IsD() )
-        for(j=0;j<(*fi).VN();++j)
-          (*fi).V(j)->SetUserBit(referredBit);
+        for(auto j=0;j<(*fi).VN();++j)
+          referredVec[tri::Index(m,(*fi).V(j))]=true;
 
-    for(ei=m.edge.begin();ei!=m.edge.end();++ei)
+    for(auto ei=m.edge.begin();ei!=m.edge.end();++ei)
       if( !(*ei).IsD() ){
-        (*ei).V(0)->SetUserBit(referredBit);
-        (*ei).V(1)->SetUserBit(referredBit);
+        referredVec[tri::Index(m,(*ei).V(0))]=true;
+        referredVec[tri::Index(m,(*ei).V(1))]=true;
       }
-
-    for(vi=m.vert.begin();vi!=m.vert.end();++vi)
-      if( (!(*vi).IsD()) && (!(*vi).IsUserBit(referredBit)))
+    
+    if(!DeleteVertexFlag) 
+      return std::count(referredVec.begin(),referredVec.end(),true);
+    
+    for(auto vi=m.vert.begin();vi!=m.vert.end();++vi)
+      if( (!(*vi).IsD()) && (!referredVec[tri::Index(m,*vi)]) )
       {
-        if(DeleteVertexFlag) Allocator<MeshType>::DeleteVertex(m,*vi);
+        Allocator<MeshType>::DeleteVertex(m,*vi);
         ++deleted;
       }
-    VertexType::DeleteBitFlag(referredBit);
     return deleted;
   }
 
@@ -445,33 +438,51 @@ public:
     return count_removed;
   }
 
-  static int SplitSelectedVertexOnEdgeMesh(MeshType& m)
-  {
-    tri::RequireCompactness(m);
-    tri::UpdateFlags<MeshType>::VertexClearV(m);
-    int count_split = 0;
-    for(size_t i=0;i<m.edge.size();++i)
-    {
-      for(int j=0;j<2;++j)
-      {
-        VertexPointer vp = m.edge[i].V(j);
-        if(vp->IsS())
-        {
-          if(!vp->IsV())
-	    {
-            m.edge[i].V(j) = &*(tri::Allocator<MeshType>::AddVertex(m,vp->P()));
-	    ++count_split;
-	    }
-          else 
-	    {
-	      vp->SetV();
-	    }
-	  
-        }
-      }
-    }
-    return count_split;
-  }
+
+	static int SplitSelectedVertexOnEdgeMesh(MeshType& m)
+	{
+		tri::RequireCompactness(m);
+
+		// count selected vertices references
+		std::unordered_map<size_t,size_t> refCount; // selected vertex index -> reference count
+		size_t countSplit = 0;
+		for (size_t i=0; i<m.edge.size(); ++i)
+		{
+			for (int j=0; j<2; ++j)
+			{
+				const VertexPointer vp = m.edge[i].V(j);
+				if (vp->IsS())
+				{
+					const size_t refs = ++refCount[Index(m, m.edge[i].V(j))];
+					if (refs > 1) {
+						countSplit++;
+					}
+				}
+			}
+		}
+		// actual split
+		if (countSplit > 0)
+		{
+			auto newVertIt = tri::Allocator<MeshType>::AddVertices(m, countSplit);
+			for (size_t i=0; i<m.edge.size(); ++i)
+			{
+				for (int j=0; j<2; ++j)
+				{
+					const VertexPointer vp = m.edge[i].V(j);
+					const size_t vIdx = Index(m, vp);
+					if (vp->IsS())
+					{
+						if (--refCount[vIdx] > 0)
+						{
+							newVertIt->ImportData(*vp);
+							m.edge[i].V(j) = &*(newVertIt++);
+						}
+					}
+				}
+			}
+		}
+		return int(countSplit);
+	}
 
 
   static void SelectNonManifoldVertexOnEdgeMesh(MeshType &m)
@@ -494,6 +505,7 @@ public:
     tri::RequireCompactness(m);
     tri::RequireVEAdjacency(m);
     tri::UpdateTopology<MeshType>::VertexEdge(m);
+	tri::UpdateSelection<MeshType>::VertexClear(m);
     for(size_t i=0;i<m.vert.size();++i)
     {
       std::vector<VertexPointer> VVStarVec;
@@ -527,30 +539,30 @@ public:
     ss.push();
     CountNonManifoldVertexFF(m,true);
     UpdateFlags<MeshType>::VertexClearV(m);
-    for (FaceIterator fi = m.face.begin(); fi != m.face.end(); ++fi)	if (!fi->IsD())
-    {
-      for(int i=0;i<3;i++)
-        if((*fi).V(i)->IsS() && !(*fi).V(i)->IsV())
-        {
-          (*fi).V(i)->SetV();
-          face::Pos<FaceType> startPos(&*fi,i);
-          face::Pos<FaceType> curPos = startPos;
-          std::set<FaceInt> faceSet;
-          do
-          {
-            faceSet.insert(std::make_pair(curPos.F(),curPos.VInd()));
-            curPos.NextE();
-          } while (curPos != startPos);
+	for (FaceIterator fi = m.face.begin(); fi != m.face.end(); ++fi) if (!fi->IsD())
+	{
+		for (int i=0; i<fi->VN(); i++)
+			if ((*fi).V(i)->IsS() && !(*fi).V(i)->IsV())
+			{
+				(*fi).V(i)->SetV();
+				face::Pos<FaceType> startPos(&*fi,i);
+				face::Pos<FaceType> curPos = startPos;
+				std::set<FaceInt> faceSet;
+				do
+				{
+					faceSet.insert(std::make_pair(curPos.F(),curPos.VInd()));
+					curPos.NextE();
+				} while (curPos != startPos);
 
-          ToSplitVec.push_back(make_pair((*fi).V(i),std::vector<FaceInt>()));
+				ToSplitVec.push_back(make_pair((*fi).V(i),std::vector<FaceInt>()));
 
-          typename std::set<FaceInt>::const_iterator iii;
+				typename std::set<FaceInt>::const_iterator iii;
 
-          for(iii=faceSet.begin();iii!=faceSet.end();++iii)
-            ToSplitVec.back().second.push_back(*iii);
-        }
-    }
-    ss.pop();
+				for(iii=faceSet.begin();iii!=faceSet.end();++iii)
+					ToSplitVec.back().second.push_back(*iii);
+			}
+	}
+	ss.pop();
     // Second step actually add new vertices and split them.
     typename tri::Allocator<MeshType>::template PointerUpdater<VertexPointer> pu;
     VertexIterator firstVp = tri::Allocator<MeshType>::AddVertices(m,ToSplitVec.size(),pu);
@@ -573,7 +585,7 @@ public:
       firstVp++;
     }
 
-    return ToSplitVec.size();
+    return int(ToSplitVec.size());
   }
 
 
@@ -931,9 +943,10 @@ public:
     FaceIterator fi;
     for (fi = m.face.begin(); fi != m.face.end(); ++fi)	if (!fi->IsD())
     {
-      TD[(*fi).V(0)]++;
-      TD[(*fi).V(1)]++;
-      TD[(*fi).V(2)]++;
+		for (int k=0; k<fi->VN(); k++)
+		{
+			TD[(*fi).V(k)]++;
+		}
     }
 
     tri::UpdateFlags<MeshType>::VertexClearV(m);
@@ -941,30 +954,33 @@ public:
     // mark out of the game the vertexes that are incident on non manifold edges.
     for (fi = m.face.begin(); fi != m.face.end(); ++fi) if (!fi->IsD())
     {
-      for(int i=0;i<3;++i)
-        if (!IsManifold(*fi,i))  {
-          (*fi).V0(i)->SetV();
-          (*fi).V1(i)->SetV();
-        }
+		for(int i=0; i<fi->VN(); ++i)
+			if (!IsManifold(*fi,i))
+			{
+				(*fi).V0(i)->SetV();
+				(*fi).V1(i)->SetV();
+			}
     }
     // Third Loop, for safe vertexes, check that the number of faces that you can reach starting
     // from it and using FF is the same of the previously counted.
-    for (fi = m.face.begin(); fi != m.face.end(); ++fi)	if (!fi->IsD())
-    {
-      for(int i=0;i<3;i++) if(!(*fi).V(i)->IsV()){
-        (*fi).V(i)->SetV();
-        face::Pos<FaceType> pos(&(*fi),i);
+	for (fi = m.face.begin(); fi != m.face.end(); ++fi)	if (!fi->IsD())
+	{
+		for(int i=0; i<fi->VN(); i++) if (!(*fi).V(i)->IsV())
+		{
+			(*fi).V(i)->SetV();
+			face::Pos<FaceType> pos(&(*fi),i);
 
-        int starSizeFF = pos.NumberOfIncidentFaces();
+			int starSizeFF = pos.NumberOfIncidentFaces();
 
-        if (starSizeFF != TD[(*fi).V(i)])
-        {
-          if(selectVert) (*fi).V(i)->SetS();
-          nonManifoldCnt++;
-        }
-      }
-    }
-    return nonManifoldCnt;
+			if (starSizeFF != TD[(*fi).V(i)])
+			{
+				if (selectVert)
+					(*fi).V(i)->SetS();
+				nonManifoldCnt++;
+			}
+		}
+	}
+	return nonManifoldCnt;
   }
   /// Very simple test of water tightness. No boundary and no non manifold edges. 
   /// Assume that it is orientable. 
@@ -1064,7 +1080,7 @@ public:
           fpt=sf.top();
           ++CCV.back().first;
           sf.pop();
-          for(int j=0;j<3;++j)
+          for(int j=0; j<fpt->VN(); ++j)
           {
             if( !face::IsBorder(*fpt,j) )
             {
@@ -1355,7 +1371,7 @@ public:
       count = 0;
 
       ScalarType NormalThrRad = math::ToRad(normalThresholdDeg);
-      ScalarType eps = 0.0001; // this epsilon value is in absolute value. It is a distance from edge in baricentric coords.
+      ScalarType eps = ScalarType(0.0001); // this epsilon value is in absolute value. It is a distance from edge in baricentric coords.
       //detection stage
       for(FaceIterator fi=m.face.begin();fi!= m.face.end();++fi ) if(!(*fi).IsV())
       { Point3<ScalarType> NN = vcg::TriangleNormal((*fi)).Normalize();
@@ -1776,6 +1792,7 @@ public:
   */
   static void SelectFoldedFaceFromOneRingFaces(MeshType &m, ScalarType cosThreshold)
   {
+    typedef std::unordered_set<VertexPointer> VertexSet;
     tri::RequireVFAdjacency(m);
     tri::RequirePerFaceNormal(m);
     tri::RequirePerVertexNormal(m);
@@ -1789,33 +1806,33 @@ public:
 #pragma omp parallel for schedule(dynamic, 10)
     for (int i = 0; i < m.face.size(); i++)
     {
-      std::vector<typename MeshType::VertexPointer> nearVertex;
-      std::vector<typename MeshType::CoordType> point;
-      typename MeshType::FacePointer f = &m.face[i];
+      VertexSet nearVertex;
+      std::vector<CoordType> pointVec;
+      FacePointer f = &m.face[i];
       for (int j = 0; j < 3; j++)
       {
-        std::vector<typename MeshType::VertexPointer> temp;
-        vcg::face::VVStarVF<typename MeshType::FaceType>(f->V(j), temp);
-              typename std::vector<typename MeshType::VertexPointer>::iterator iter = temp.begin();
+        std::vector<VertexPointer> temp;
+        vcg::face::VVStarVF<FaceType>(f->V(j), temp);
+        typename std::vector<VertexPointer>::iterator iter = temp.begin();
         for (; iter != temp.end(); iter++)
         {
           if ((*iter) != f->V1(j) && (*iter) != f->V2(j))
           {
-            nearVertex.push_back((*iter));
-            point.push_back((*iter)->P());
+            if (nearVertex.insert((*iter)).second)
+              pointVec.push_back((*iter)->P());
           }
         }
-        nearVertex.push_back(f->V(j));
-        point.push_back(f->P(j));
+        nearVertex.insert(f->V(j));
+        pointVec.push_back(f->P(j));
       }
 
-      if (point.size() > 3)
+      if (pointVec.size() > 3)
       {
-        vcg::Plane3<typename MeshType::ScalarType> plane;
-        vcg::FitPlaneToPointSet(point, plane);
+        vcg::Plane3<ScalarType> plane;
+        vcg::FitPlaneToPointSet(pointVec, plane);
         float avgDot = 0;
-        for (int j = 0; j < nearVertex.size(); j++)
-          avgDot += plane.Direction().dot(nearVertex[j]->N());
+        for (auto  nvp :  nearVertex)
+          avgDot += plane.Direction().dot(nvp->N());
         avgDot /= nearVertex.size();
         typename MeshType::VertexType::NormalType normal;
         if (avgDot < 0)
@@ -1826,6 +1843,38 @@ public:
           f->SetS();
       }
     }
+  }
+  /**
+  Select the faces on the first mesh that intersect the second mesh.
+  It uses a grid for querying so a face::mark should be added.
+  */
+  static int SelectIntersectingFaces(MeshType &m1, MeshType &m2)
+  {
+    RequirePerFaceMark(m2);
+    RequireCompactness(m1);
+    RequireCompactness(m2);
+    
+    tri::UpdateSelection<MeshType>::FaceClear(m1);
+    
+    TriMeshGrid gM;
+    gM.Set(m2.face.begin(),m2.face.end());
+    int selCnt=0;
+    for(auto fi=m1.face.begin();fi!=m1.face.end();++fi) 
+    {
+      Box3< ScalarType> bbox;
+      (*fi).GetBBox(bbox);
+      std::vector<FaceType*> inBox;
+      vcg::tri::GetInBoxFace(m2, gM, bbox,inBox);
+      for(auto fib=inBox.begin(); fib!=inBox.end(); ++fib)
+      {
+          if(Clean<MeshType>::TestFaceFaceIntersection(&*fi,*fib)){
+            fi->SetS();
+            ++selCnt;
+          }
+      }
+      inBox.clear();
+    }
+    return selCnt;
   }
 
 }; // end class
