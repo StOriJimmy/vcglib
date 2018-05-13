@@ -51,6 +51,9 @@ public:
   typedef typename MeshType::FaceType       FaceType;
   typedef typename MeshType::FacePointer    FacePointer;
   typedef typename MeshType::FaceIterator   FaceIterator;
+  typedef typename MeshType::TetraType      TetraType;
+  typedef typename MeshType::TetraPointer   TetraPointer;
+  typedef typename MeshType::TetraIterator  TetraIterator;
 
   /// \brief Reset all the mesh flags (vertexes edge faces) setting everithing to zero (the default value for flags)
 
@@ -65,7 +68,11 @@ public:
     if(HasPerFaceFlags(m) )
       for(FaceIterator fi=m.face.begin(); fi!=m.face.end(); ++fi)
         (*fi).Flags() = 0;
+    if(HasPerTetraFlags(m) )
+      for(TetraIterator ti=m.tetra.begin(); ti!=m.tetra.end(); ++ti)
+        (*ti).Flags() = 0;
   }
+
 
   static void VertexClear(MeshType &m, unsigned int FlagMask = 0xffffffff)
   {
@@ -91,6 +98,14 @@ public:
       if(!(*fi).IsD()) (*fi).Flags() &= andMask ;
   }
 
+  static void TetraClear(MeshType &m, unsigned int FlagMask = 0xffffffff)
+  {
+    RequirePerTetraFlags(m);
+    int andMask = ~FlagMask;
+    for(TetraIterator ti=m.tetra.begin(); ti!=m.tetra.end(); ++ti)
+      if(!(*ti).IsD()) (*ti).Flags() &= andMask ;
+  }
+
   static void VertexSet(MeshType &m, unsigned int FlagMask)
   {
     RequirePerVertexFlags(m);
@@ -112,6 +127,13 @@ public:
       if(!(*fi).IsD()) (*fi).Flags() |= FlagMask ;
   }
 
+  static void TetraSet(MeshType &m, unsigned int FlagMask)
+  {
+    RequirePerTetraFlags(m);
+    for(TetraIterator ti=m.tetra.begin(); ti!=m.tetra.end(); ++ti)
+      if(!(*ti).IsD()) (*ti).Flags() |= FlagMask ;
+  }
+
 
 
   static void VertexClearV(MeshType &m) { VertexClear(m,VertexType::VISITED);}
@@ -122,10 +144,7 @@ public:
   static void FaceClearB(MeshType &m) { FaceClear(m,FaceType::BORDER012);}
   static void FaceClearS(MeshType &m) {FaceClear(m,FaceType::SELECTED);}
   static void FaceClearF(MeshType &m) { FaceClear(m,FaceType::FAUX012);}
-  static void FaceClearCreases(MeshType &m) { FaceClear(m,FaceType::CREASE0);
-                                              FaceClear(m,FaceType::CREASE1);
-                                              FaceClear(m,FaceType::CREASE2);
-                                            }
+  static void FaceClearFaceEdgeS(MeshType &m) { FaceClear(m,FaceType::FACEEDGESEL012 ); }
 
   static void EdgeSetV(MeshType &m) { EdgeSet(m,EdgeType::VISITED);}
   static void VertexSetV(MeshType &m) { VertexSet(m,VertexType::VISITED);}
@@ -134,9 +153,13 @@ public:
   static void FaceSetV(MeshType &m) { FaceSet(m,FaceType::VISITED);}
   static void FaceSetB(MeshType &m) { FaceSet(m,FaceType::BORDER);}
   static void FaceSetF(MeshType &m) { FaceSet(m,FaceType::FAUX012);}
-
+  static void TetraClearV(MeshType &m) { TetraClear(m, TetraType::VISITED); }
+  static void TetraClearS(MeshType &m) { TetraClear(m, TetraType::SELECTED); }
+  static void TetraClearB(MeshType &m) { TetraClear(m, TetraType::BORDER0123); }
+  static void TetraSetV(MeshType &m) { TetraSet(m, TetraType::VISITED); }
+  static void TetraSetS(MeshType &m) { TetraSet(m, TetraType::SELECTED); }
+  static void TetraSetB(MeshType &m) { TetraSet(m, TetraType::BORDER0123); }
   /// \brief Compute the border flags for the faces using the Face-Face Topology.
-
   /**
  \warning Obviously it assumes that the topology has been correctly computed (see: UpdateTopology::FaceFace )
 */
@@ -153,6 +176,23 @@ public:
       }
   }
 
+  /// \brief Compute the border flags for the tetras using the Tetra-Tetra Topology.
+  /**
+ \warning Obviously it assumes that the topology has been correctly computed (see: UpdateTopology::FaceFace )
+*/
+  static void TetraBorderFromTT(MeshType &m)
+  {
+    RequirePerTetraFlags(m);
+    RequireTTAdjacency(m);
+
+    for(TetraIterator ti=m.tetra.begin(); ti!=m.tetra.end(); ++ti)
+      if(!(*ti).IsD())
+        for(int j = 0; j < 4; ++j)
+        {
+          if (tetrahedron::IsBorder(*ti,j)) (*ti).SetB(j);
+          else (*ti).ClearB(j);
+        }
+  }
 
   static void FaceBorderFromVF(MeshType &m)
   {
@@ -380,20 +420,20 @@ public:
 
 
   /// \brief Marks feature edges according to two signed dihedral angles.
-  /// Actually it marks as fauxedges all the non feature edges,
-  /// e.g. the edges where the signed dihedral angle between the normal of two incident faces , 
-  /// is between the two given thresholds.
-  /// In this way all the edges that are almost planar are marked as Faux Edges (e.g. edges to be ignored)
+  /// Actually it uses the face_edge selection bit on faces,
+  /// we select the edges where the signed dihedral angle between the normal of two incident faces , 
+  /// is outside the two given thresholds.
+  /// In this way all the edges that are almost planar are marked as non selected (e.g. edges to be ignored)
   /// Note that it uses the signed dihedral angle convention (negative for concave edges and positive for convex ones);
   ///
   /// Optionally it can also mark as feature edges also the boundary edges.
   ///
-  static void FaceFauxSignedCrease(MeshType &m, float AngleRadNeg, float AngleRadPos, bool MarkBorderFlag = false )
+  static void FaceEdgeSelSignedCrease(MeshType &m, float AngleRadNeg, float AngleRadPos, bool MarkBorderFlag = false )
   {
     RequirePerFaceFlags(m);
     RequireFFAdjacency(m);
     //initially Nothing is faux (e.g all crease)
-    FaceClearF(m);
+    FaceClearFaceEdgeS(m);
     // Then mark faux only if the signed angle is the range.
     for(FaceIterator fi=m.face.begin();fi!=m.face.end();++fi) if(!(*fi).IsD())
     {
@@ -402,12 +442,12 @@ public:
         if(!face::IsBorder(*fi,z) )
         {
           ScalarType angle = DihedralAngleRad(*fi,z);
-          if(angle>AngleRadNeg && angle<AngleRadPos)
-            (*fi).SetF(z);
+          if(angle<AngleRadNeg || angle>AngleRadPos)
+            (*fi).SetFaceEdgeS(z);
         }
         else
         {
-          if(MarkBorderFlag) (*fi).SetF(z);
+          if(MarkBorderFlag) (*fi).SetFaceEdgeS(z);
         }
       }
     }
@@ -416,29 +456,30 @@ public:
   /// \brief Marks feature edges according to border flag.
   /// Actually it marks as fauxedges all the non border edges,
   ///
-  static void FaceFauxBorder(MeshType &m)
+  static void FaceEdgeSelBorder(MeshType &m)
   {
     RequirePerFaceFlags(m);
     RequireFFAdjacency(m);
     //initially Nothing is faux (e.g all crease)
-    FaceClearF(m);
+    FaceClearFaceEdgeS(m);
     // Then mark faux only if the signed angle is the range.
     for(FaceIterator fi=m.face.begin();fi!=m.face.end();++fi) if(!(*fi).IsD())
     {
       for(int z=0;z<(*fi).VN();++z)
       {
-        if(!face::IsBorder(*fi,z) ) (*fi).SetF(z);
+        if(!face::IsBorder(*fi,z) ) (*fi).SetFaceEdgeS(z);
       }
     }
   }
 
   /// \brief Marks feature edges according to a given angle
-  /// Actually it marks as fauxedges all the non feature edges,
-  /// e.g. the edge such that the angle between the normal of two faces sharing it is less than the given threshold.
-  /// In this way all the near planar edges are marked as Faux Edges (e.g. edges to be ignored)
-  static void FaceFauxCrease(MeshType &m,float AngleRad)
+  /// Actually it uses the face_edge selection bit on faces,
+  /// we select the edges where the dihedral angle between the normal of two incident faces is larger than , 
+  /// the given thresholds.
+  /// In this way all the near planar edges are marked remains not selected (e.g. edges to be ignored)
+  static void FaceEdgeSelCrease(MeshType &m,float AngleRad)
   {
-    FaceFauxSignedCrease(m,-AngleRad,AngleRad);
+    FaceEdgeSelSignedCrease(m,-AngleRad,AngleRad);
   }
 
  
