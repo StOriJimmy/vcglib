@@ -217,26 +217,28 @@ class Smooth
 
         //if we are applying to a tetrahedral mesh:
         ForEachTetra(m, [&](TetraType &t) {
-            for (int i = 0; i < 4; ++i)
-                if (!t.IsB(i))
+            for (int i = 0; i < 6; ++i)
+            {
+                VertexPointer v0, v1, vo0, vo1;
+                v0 = t.V(Tetra::VofE(i, 0));
+                v1 = t.V(Tetra::VofE(i, 1));
+
+                if (cotangentFlag)
                 {
-                    VertexPointer v0, v1, v2;
-                    v0 = t.V(Tetra::VofF(i, 0));
-                    v1 = t.V(Tetra::VofF(i, 1));
-                    v2 = t.V(Tetra::VofF(i, 2));
+                    vo0 = t.V(Tetra::VofE(5 - i, 0));
+                    vo1 = t.V(Tetra::VofE(5 - i, 1));
 
-                    TD[v0].sum += v1->P() * weight;
-                    TD[v0].sum += v2->P() * weight;
-                    TD[v0].cnt += 2 * weight;
+                    ScalarType angle = Tetra::DihedralAngle(t, 5 - i);
+                    ScalarType length = vcg::Distance(vo0->P(), vo1->P());
 
-                    TD[v1].sum += v0->P() * weight;
-                    TD[v1].sum += v2->P() * weight;
-                    TD[v1].cnt += 2 * weight;
-
-                    TD[v2].sum += v0->P() * weight;
-                    TD[v2].sum += v1->P() * weight;
-                    TD[v2].cnt += 2 * weight;
+                    weight = (length / 6.) * (tan(M_PI / 2. - angle));
                 }
+
+                TD[v0].sum += v1->cP() * weight;
+                TD[v1].sum += v0->cP() * weight;
+                TD[v0].cnt += weight;
+                TD[v1].cnt += weight;
+            }
         });
 
         ForEachTetra(m, [&](TetraType &t) {
@@ -258,28 +260,28 @@ class Smooth
                 }
         });
 
-        ForEachTetra(m, [&](TetraType &t) {
-            for (int i = 0; i < 4; ++i)
-                if (t.IsB(i))
-                {
-                    VertexPointer v0, v1, v2;
-                    v0 = t.V(Tetra::VofF(i, 0));
-                    v1 = t.V(Tetra::VofF(i, 1));
-                    v2 = t.V(Tetra::VofF(i, 2));
+//        ForEachTetra(m, [&](TetraType &t) {
+//            for (int i = 0; i < 4; ++i)
+//                if (t.IsB(i))
+//                {
+//                    VertexPointer v0, v1, v2;
+//                    v0 = t.V(Tetra::VofF(i, 0));
+//                    v1 = t.V(Tetra::VofF(i, 1));
+//                    v2 = t.V(Tetra::VofF(i, 2));
 
-                    TD[v0].sum += v1->P() * weight;
-                    TD[v0].sum += v2->P() * weight;
-                    TD[v0].cnt += 2 * weight;
+//                    TD[v0].sum += v1->P();
+//                    TD[v0].sum += v2->P();
+//                    TD[v0].cnt += 2;
 
-                    TD[v1].sum += v0->P() * weight;
-                    TD[v1].sum += v2->P() * weight;
-                    TD[v1].cnt += 2 * weight;
+//                    TD[v1].sum += v0->P();
+//                    TD[v1].sum += v2->P();
+//                    TD[v1].cnt += 2;
 
-                    TD[v2].sum += v0->P() * weight;
-                    TD[v2].sum += v1->P() * weight;
-                    TD[v2].cnt += 2 * weight;
-                }
-        });
+//                    TD[v2].sum += v0->P();
+//                    TD[v2].sum += v1->P();
+//                    TD[v2].cnt += 2;
+//                }
+//        });
 
         FaceIterator fi;
         for (fi = m.face.begin(); fi != m.face.end(); ++fi)
@@ -912,7 +914,7 @@ So if
     static void VertexCoordViewDepth(MeshType &m,
                                      const CoordType &viewpoint,
                                      const ScalarType alpha,
-                                     int step, bool SmoothBorder = false)
+									 int step, bool SmoothSelected, bool SmoothBorder = false)
     {
         LaplacianInfo lpz;
         lpz.sum = CoordType(0, 0, 0);
@@ -961,13 +963,14 @@ So if
 
             for (vi = m.vert.begin(); vi != m.vert.end(); ++vi)
                 if (!(*vi).IsD() && TD[*vi].cnt > 0)
-                {
-                    CoordType np = TD[*vi].sum / TD[*vi].cnt;
-                    CoordType d = (*vi).cP() - viewpoint;
-                    d.Normalize();
-                    ScalarType s = d.dot(np - (*vi).cP());
-                    (*vi).P() += d * (s * alpha);
-                }
+					if (!SmoothSelected || (*vi).IsS())
+					{
+						CoordType np = TD[*vi].sum / TD[*vi].cnt;
+						CoordType d = (*vi).cP() - viewpoint;
+						d.Normalize();
+						ScalarType s = d.dot(np - (*vi).cP());
+						(*vi).P() += d * (s * alpha);
+					}
         }
     }
 
