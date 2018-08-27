@@ -238,7 +238,13 @@ namespace vcg {
 
 		///then text convex
 		if (!Convex(p0,p1,p2))
-			std::swap<Point2<SCALAR_TYPE> >(p1,p2);
+		{
+			Point2<SCALAR_TYPE> p_t;
+			p_t = p1;
+			p2 = p1;
+			p1 = p_t;
+		}
+//			std::swap<Point2<SCALAR_TYPE> >(p1,p2);
 		return((Convex(p,p0,p1))&&(Convex(p,p1,p2))&&(Convex(p,p2,p0)));
 		//return((Convex(p,p0,p1))&&(Convex(p,p1,p2))&&(Convex(p,p2,p0)));
 	}
