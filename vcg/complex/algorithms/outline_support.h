@@ -149,7 +149,7 @@ public:
     }
   }
 
-  static int LargestOutline2(const std::vector< std::vector< Point2f > > &outline2Vec)
+  static int LargestOutline2(const std::vector< std::vector< Point2<ScalarType> > > &outline2Vec)
   {
     float maxArea =0;
     int maxInd=-1;
