@@ -266,14 +266,14 @@ public:
         EdgeSorter() {} // Nothing to do
 
 
-        void Set( const FacePointer pf, const int nz )
+        void Set( const FacePointer pf, const int nz, const int size = 3 )
         {
             assert(pf!=0);
             assert(nz>=0);
-            assert(nz<3);
+            assert(nz< size);
 
             v[0] = pf->V(nz);
-            v[1] = pf->V((nz+1)%3);
+            v[1] = pf->V((nz+1)% size);
             assert(v[0] != v[1]);
 
             if( v[0] > v[1] ) std::swap(v[0],v[1]);
@@ -370,7 +370,7 @@ public:
             if( ! (*pf).IsD() )
                 for(int j=0;j<(*pf).VN();++j)
                 {
-                    (*p).Set(&(*pf),j);
+                    (*p).Set(&(*pf),j, (*pf).VN());
                     (*pf).ClearB(j);
                     ++p;
                 }
