@@ -260,6 +260,7 @@ inline static Color4 ColorRamp(const float &minf,const float  &maxf ,float v )
 
 inline static unsigned short ToUnsignedB5G5R5(Color4 &) { return 0;}
 inline static unsigned short ToUnsignedR5G5B5(Color4 &) { return 0;}
+inline static unsigned int ToUnsignedARGB32(Color4 &) { return 0; }
 
 inline static Color4 FromUnsignedB5G5R5(unsigned short)
 {
@@ -268,6 +269,10 @@ inline static Color4 FromUnsignedB5G5R5(unsigned short)
 inline static Color4 FromUnsignedR5G5B5(unsigned short)
 {
   return Color4(Color4::White);
+}
+inline static Color4 FromUnsignedARGB32(unsigned int)
+{
+	return Color4(Color4::White);
 }
 
 }; /// END CLASS ///////////////////
@@ -437,6 +442,16 @@ inline unsigned short Color4<unsigned char>::ToUnsignedR5G5B5(Color4<unsigned ch
   unsigned short res = r + g*32 + b*1024;
   return res;
 }
+template<>
+inline unsigned int Color4<unsigned char>::ToUnsignedARGB32(Color4<unsigned char> &cc)
+{
+	unsigned short r = cc[0];
+	unsigned short g = cc[1];
+	unsigned short b = cc[2];
+	unsigned short a = cc[3];
+	unsigned int res = (a << 24) | (r << 16) | (g << 8) | b; /// it's opposite to the R5G5B5
+	return res;
+}
 
 
 template<>
@@ -457,6 +472,17 @@ inline Color4<unsigned char> Color4<unsigned char>::FromUnsignedB5G5R5(unsigned 
   unsigned short r = ((val/1024)%32)*8;
       Color4b cc((unsigned char)r,(unsigned char)g,(unsigned char)b,(unsigned char)255);
   return cc;
+}
+
+template<>
+inline Color4<unsigned char> Color4<unsigned char>::FromUnsignedARGB32(unsigned int val)
+{
+	unsigned short r = (0xff << 16 & val) >> 16;
+	unsigned short g = (0xff << 8 & val) >> 8;
+	unsigned short b = (0xff & val);
+	unsigned short a = (0xff << 24 & val) >> 24;
+	Color4b cc((unsigned char)r, (unsigned char)g, (unsigned char)b, (unsigned char)a);
+	return cc;
 }
 
 /*@}*/

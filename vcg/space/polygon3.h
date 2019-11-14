@@ -245,7 +245,7 @@ vcg::Plane3<typename PolygonType::ScalarType> PolyFittingPlane(const PolygonType
     typedef typename PolygonType::ScalarType ScalarType;
     vcg::Plane3<ScalarType> BestPL;
     assert(F.VN()>=3);
-    std::vector<CoordType> pointVec;
+    std::vector<vcg::Point3<ScalarType>> pointVec;
     for (int i=0;i<F.VN();i++)
         pointVec.push_back(F.cP(i));
 

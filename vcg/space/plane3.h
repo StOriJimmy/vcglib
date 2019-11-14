@@ -142,6 +142,11 @@ public:
 	  if(NORM) Normalize();
 	  _offset = p0.dot(_dir);
   }
+
+  inline void Flip() {
+	  _dir = -_dir;
+	  _offset = -_offset;
+  }
 };	// end class Plane3
 
 typedef Plane3<float>  Plane3f;

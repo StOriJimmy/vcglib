@@ -124,6 +124,11 @@ public:
 		if (_p0[1]<_p1[1]) { t.min[1]=_p0[1];t.max[1]=_p1[1];} else { t.min[1]=_p1[1];t.max[1]=_p0[1];}
 	  if (_p0[2]<_p1[2]) { t.min[2]=_p0[2];t.max[2]=_p1[2];} else { t.min[2]=_p1[2];t.max[2]=_p0[2];}
 	  return t; }
+	/// return the bounding box
+	inline void GetBBox(Box3<ScalarType> &t) const
+	{
+		t = BBox();
+	}
 		/// returns segment length
 	ScalarType Length() const
 	{ return (_p0 - _p1).Norm(); }

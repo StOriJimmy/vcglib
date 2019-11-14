@@ -215,12 +215,14 @@ public:
 	  /// points equality
 	inline bool operator == ( Point2 const & p ) const
 	{
-			return (_v[0]==p._v[0] && _v[1]==p._v[1]);
+		return SquaredDistance(p) < FLT_EPSILON;
+		//return (_v[0]==p._v[0] && _v[1]==p._v[1]);
 	}
 	  /// disparity between points
 	inline bool operator != ( Point2 const & p ) const
 	{
-			return ( (_v[0]!=p._v[0]) || (_v[1]!=p._v[1]) );
+		return SquaredDistance(p) > FLT_EPSILON;
+		//return ( (_v[0]!=p._v[0]) || (_v[1]!=p._v[1]) );
 	}
 	  /// lexical ordering
 	inline bool operator <  ( Point2 const & p ) const
