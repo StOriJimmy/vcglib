@@ -366,7 +366,11 @@ bool RefineE(MESH_TYPE &m, MIDPOINT &mid, EDGEPRED &ep,bool RefineSelected=false
                 RD[edgeCur.F()].ep[edgeCur.E()]=true;
                 ++NewFaceNum;
                 ++NewVertNum;
-                assert(edgeCur.IsManifold());
+				if (!edgeCur.IsManifold()) { 
+					tri::Allocator<MESH_TYPE> :: template DeletePerFaceAttribute<RefinedFaceData<VertexPointer> >(m, RD);
+					throw std::logic_error("not manifold");
+					return false; 
+				}
                 if(!edgeCur.IsBorder())
                 {
                     edgeCur.FlipF();

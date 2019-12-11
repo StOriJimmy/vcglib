@@ -182,6 +182,11 @@ private:
 				vector<FaceType*> ff;
 				face::VFExtendedStarVF(&*vi, 0, ff);
 
+				if (ff.empty()) {
+					vi->Q() = 0;
+					vi->SetV();
+					continue;
+				}
 				ScalarType tot = 0.f;
 				auto it = ff.begin();
 				Point3<ScalarType> fNormal = NormalizedTriangleNormal(**it);

@@ -70,6 +70,9 @@ namespace vcg {
         The class is templated over the ScalarType class that is used to represent coordinates.
 				All the usual operator overloading (* + - ...) is present.
      */
+
+template <class T> class Box2;
+
 template <class P2ScalarType> class Point2
 {
 protected:
@@ -212,6 +215,9 @@ public:
 			if(n>0.0) {	_v[0] /= n;	_v[1] /= n; }
 			return *this;
 	}
+
+	Box2<P2ScalarType> GetBBox(Box2<P2ScalarType> &bb) const;
+
 	  /// points equality
 	inline bool operator == ( Point2 const & p ) const
 	{

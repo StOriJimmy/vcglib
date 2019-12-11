@@ -32,16 +32,28 @@
 #include <vcg/simplex/face/distance.h>
 
 namespace vcg {
+
+    template <class OBJ_TYPE>
+    class PMarker2
+    {
+    public:
+	    int mark;
+	    PMarker2(){mark=0;}
+        void UnMarkAll(){mark++;}
+	    bool IsMarked(OBJ_TYPE* obj) { int markObj=obj->TMark(); return(markObj==mark); }
+	    void Mark(OBJ_TYPE* obj) {obj->TMark()=mark;}
+    };
+
     namespace tri {
 
         //**MARKER CLASSES**//
         template <class MESH_TYPE,class OBJ_TYPE>
-        class Tmark
+        class Tmark2
         {
             MESH_TYPE *m;
         public:
-            Tmark(){}
-            Tmark(	MESH_TYPE *m) {SetMesh(m);}
+            Tmark2(){}
+            Tmark2(	MESH_TYPE *m) {SetMesh(m);}
             void UnMarkAll(){ vcg::tri::UnMarkAll(*m);}
             bool IsMarked(OBJ_TYPE* obj){return (vcg::tri::IsMarked(*m,obj));}
             void Mark(OBJ_TYPE* obj){ vcg::tri::Mark(*m,obj);}
@@ -51,12 +63,12 @@ namespace vcg {
             }
         };
 
-        template <class MESH, class GRID>
-            typename MESH::FaceType * GetClosestEdgeBase( MESH & mesh,GRID & gr,const typename GRID::CoordType & _p,
-                                                          const typename GRID::ScalarType _maxDist,typename GRID::ScalarType & _minDist,
-                                                          typename GRID::CoordType &_closestPt)
+        template <class MESH, class GRID1>
+            typename MESH::FaceType * GetClosestEdgeBase( MESH & mesh,GRID1 & gr,const typename GRID1::CoordType & _p,
+                                                          const typename GRID1::ScalarType _maxDist,typename GRID1::ScalarType & _minDist,
+                                                          typename GRID1::CoordType &_closestPt)
         {
-            typedef typename GRID::ScalarType ScalarType;
+            typedef typename GRID1::ScalarType ScalarType;
             typedef Point3<ScalarType> Point3x;
             typedef FaceTmark<MESH> MarkerFace;
             MarkerFace mf;

@@ -372,6 +372,11 @@ Point2<ScalarType> ClosestPoint2Box2(const Point2<ScalarType> &test,
 	return closest;
 }
 
+template <class T> Box2<T> Point2<T>::GetBBox(Box2<T> &bb) const {
+ bb.Set( *this );
+ return bb;
+}
+
 	/// Specificazione di box of short
 typedef Box2<short>  Box2s;
 	/// Specificazione di box of int

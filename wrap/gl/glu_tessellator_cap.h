@@ -1,6 +1,6 @@
 #ifndef GLU_TESSELLATOR_CAP_H
 #define GLU_TESSELLATOR_CAP_H
-#include "glu_tesselator.h"
+#include "wrap/gl/glu_tesselator.h"
 #include <vcg/simplex/edge/pos.h>
 #include <vcg/complex/algorithms/clean.h>
 #include <vcg/complex/algorithms/update/bounding.h>
