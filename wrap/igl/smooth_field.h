@@ -34,10 +34,14 @@
 #include <vcg/complex/algorithms/mesh_to_matrix.h>
 
 //igl related stuff
+
 #include <igl/n_polyvector.h>
 #include <igl/principal_curvature.h>
 #include <igl/igl_inline.h>
+
+#ifdef COMISO_FIELD
 #include <igl/copyleft/comiso/nrosy.h>
+#endif
 
 namespace vcg {
 namespace tri {
@@ -228,7 +232,7 @@ class FieldSmoother
                           ScalarType alpha_soft,
                           int Ndir)
     {
-
+#ifdef COMISO_FIELD
         assert((Ndir==2)||(Ndir==4));
         Eigen::MatrixXi F;
         Eigen::MatrixXd V;
@@ -258,6 +262,9 @@ class FieldSmoother
             mesh.face[i].PD1()=dir1*Norm1;
             mesh.face[i].PD2()=dir2*Norm2;
         }
+#else
+        assert(0);
+#endif
     }
 
     static void SmoothNPoly(MeshType &mesh,
@@ -399,7 +406,8 @@ public:
 
         Eigen::MatrixXd PD1,PD2,PV1,PV2;
         MeshToMatrix<MeshType>::GetTriMeshData(mesh,F,V);
-        igl::principal_curvature(V,F,PD1,PD2,PV1,PV2,Nring);
+
+        igl::principal_curvature(V,F,PD1,PD2,PV1,PV2,Nring,true);
 
         //then copy curvature per vertex
         for (size_t i=0;i<mesh.vert.size();i++)
@@ -484,13 +492,21 @@ public:
     {
         //for the moment only cross and line field
 
-        //initialize direction by curvature if needed
-//        if ((SParam.alpha_curv>0)||
-//             (SParam.sharp_thr>0)||
-//             (SParam.curv_thr>0))
-        InitByCurvature(mesh,SParam.curvRing);
+//        //initialize direction by curvature if needed
+        if ((SParam.alpha_curv>0)||
+             (SParam.sharp_thr>0)||
+             (SParam.curv_thr>0))
+        {
+            InitByCurvature(mesh,SParam.curvRing);
+            SelectConstraints(mesh,SParam);
+        }
+        else
+        {
+            SelectConstraints(mesh,SParam);
+            vcg::tri::CrossField<MeshType>::PropagateFromSelF(mesh);
+        }
 
-        SelectConstraints(mesh,SParam);
+
         //then do the actual smooth
         SmoothDirections(mesh,SParam.Ndir,SParam.SmoothM,true,SParam.alpha_curv);
     }

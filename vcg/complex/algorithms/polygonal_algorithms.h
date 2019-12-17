@@ -72,11 +72,12 @@ This class is used to performs varisous kind of geometric optimization on generi
 template <class PolyMeshType>
 class PolygonalAlgorithm
 {
-    typedef typename PolyMeshType::FaceType FaceType;
-    typedef typename PolyMeshType::VertexType VertexType;
-    typedef typename PolyMeshType::CoordType CoordType;
-    typedef typename PolyMeshType::ScalarType ScalarType;
-    typedef typename vcg::face::Pos<FaceType> PosType;
+	typedef typename PolyMeshType::FaceType      FaceType;
+	typedef typename PolyMeshType::VertexType    VertexType;
+	typedef typename PolyMeshType::VertexPointer VertexPointer;
+	typedef typename PolyMeshType::CoordType     CoordType;
+	typedef typename PolyMeshType::ScalarType    ScalarType;
+	typedef typename vcg::face::Pos<FaceType>    PosType;
 public:
     static bool CollapseEdges(PolyMeshType &poly_m,
                               const std::vector<PosType> &CollapsePos,
@@ -650,7 +651,8 @@ public:
 
     static void LaplacianReproject(PolyMeshType &poly_m,
                                    int nstep=100,
-                                   ScalarType Damp=0.5)
+                                   ScalarType Damp=0.5,
+                                   bool OnlyOnSelected=false)
     {
         //transform into triangular
         TempMesh GuideSurf;
@@ -660,7 +662,7 @@ public:
         vcg::tri::UpdateNormal<TempMesh>::PerVertexNormalizedPerFace(GuideSurf);
         vcg::tri::UpdateTopology<TempMesh>::FaceFace(GuideSurf);
         vcg::tri::UpdateFlags<TempMesh>::FaceBorderFromFF(GuideSurf);
-        LaplacianReproject<TempMesh>(poly_m,GuideSurf,nstep,Damp=0.5);
+        LaplacianReproject<TempMesh>(poly_m,GuideSurf,nstep,Damp,0.5,OnlyOnSelected);
     }
 
     static void Laplacian(PolyMeshType &poly_m,
@@ -1257,42 +1259,42 @@ public:
         }
     }
 
-    static void Triangulate(PolyMeshType &poly_m,size_t IndexF)
-    {
+	/*! \brief Triangulate a polygonal face with a triangle fan.
+	 * \returns pointer to the newly added vertex.
+	 */
+	static VertexPointer Triangulate(PolyMeshType & poly_m, size_t IndexF)
+	{
 
-        CoordType bary=vcg::PolyBarycenter(poly_m.face[IndexF]);
-        size_t sizeV=poly_m.face[IndexF].VN();
+		const CoordType bary = vcg::PolyBarycenter(poly_m.face[IndexF]);
+		size_t sizeV = poly_m.face[IndexF].VN();
 
-        //add the new vertex
-        vcg::tri::Allocator<PolyMeshType>::AddVertex(poly_m,bary);
-        VertexType *newV=&poly_m.vert.back();
+		//add the new vertex
+		VertexPointer newV = &(*vcg::tri::Allocator<PolyMeshType>::AddVertex(poly_m,bary));
 
-        std::vector<size_t> ToUpdateF;
+		//then reupdate the faces
+		for (size_t j=0;j<(sizeV-1);j++)
+		{
+			VertexType * v0=poly_m.face[IndexF].V0(j);
+			VertexType * v1=poly_m.face[IndexF].V1(j);
+			VertexType * v2=newV;
 
-        //then reupdate the faces
-        for (size_t j=0;j<(sizeV-1);j++)
-        {
-            VertexType * v0=poly_m.face[IndexF].V0(j);
-            VertexType * v1=poly_m.face[IndexF].V1(j);
-            VertexType * v2=newV;
+			vcg::tri::Allocator<PolyMeshType>::AddFaces(poly_m,1);
 
-            vcg::tri::Allocator<PolyMeshType>::AddFaces(poly_m,1);
+			poly_m.face.back().Alloc(3);
+			poly_m.face.back().V(0)=v0;
+			poly_m.face.back().V(1)=v1;
+			poly_m.face.back().V(2)=v2;
+		}
 
-            poly_m.face.back().Alloc(3);
-            poly_m.face.back().V(0)=v0;
-            poly_m.face.back().V(1)=v1;
-            poly_m.face.back().V(2)=v2;
-            ToUpdateF.push_back(poly_m.face.size()-1);
-        }
-        VertexType * v0=poly_m.face[IndexF].V0((sizeV-1));
-        VertexType * v1=poly_m.face[IndexF].V1((sizeV-1));
-        poly_m.face[IndexF].Dealloc();
-        poly_m.face[IndexF].Alloc(3);
-        poly_m.face[IndexF].V(0)=v0;
-        poly_m.face[IndexF].V(1)=v1;
-        poly_m.face[IndexF].V(2)=newV;
-        ToUpdateF.push_back(IndexF);
-    }
+		VertexType * v0=poly_m.face[IndexF].V0((sizeV-1));
+		VertexType * v1=poly_m.face[IndexF].V1((sizeV-1));
+		poly_m.face[IndexF].Dealloc();
+		poly_m.face[IndexF].Alloc(3);
+		poly_m.face[IndexF].V(0)=v0;
+		poly_m.face[IndexF].V(1)=v1;
+		poly_m.face[IndexF].V(2)=newV;
+		return newV;
+	}
 
     static void ReorderFaceVert(FaceType &f,const size_t &StartI)
     {
@@ -1378,18 +1380,24 @@ public:
         }while (!NeedMerge.empty());
     }
 
-    static void Triangulate(PolyMeshType &poly_m, bool alsoTriangles = true)
+    static void Triangulate(PolyMeshType &poly_m,
+                            bool alsoTriangles = true,
+                            bool OnlyS=false)
     {
         size_t size0 = poly_m.face.size();
         if (alsoTriangles)
         {
             for (size_t i=0; i<size0; i++)
+            {
+                if ((OnlyS)&&(!poly_m.face[i].IsS()))continue;
                 Triangulate(poly_m, i);
+            }
         }
         else
         {
             for (size_t i=0; i<size0; i++)
             {
+                if ((OnlyS)&&(!poly_m.face[i].IsS()))continue;
                 if (poly_m.face[i].VN() > 3)
                 {
                     Triangulate(poly_m, i);
