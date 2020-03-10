@@ -289,6 +289,7 @@ void FFDetach(FaceType & f, const int e)
 }
 
 
+// TODO: deprecate the signature of the functions below and use references
 /** This function attach the face (via the edge z1) to another face (via the edge z2). It's possible to use it also in non-two manifold situation.
         The function cannot be applicated if the adjacencies among faces aren't define.
         @param z1 Index of the edge
@@ -296,7 +297,7 @@ void FFDetach(FaceType & f, const int e)
         @param z2 The edge of the face f2
 */
 template <class FaceType>
-void FFAttach(FaceType * &f, int z1, FaceType *&f2, int z2)
+void FFAttach(FaceType * f, int z1, FaceType * f2, int z2)
 {
 	//typedef FEdgePosB< FACE_TYPE > ETYPE;
 	vcg::face::Pos< FaceType > EPB(f2,z2);
@@ -336,7 +337,7 @@ void FFAttach(FaceType * &f, int z1, FaceType *&f2, int z2)
         @param z2 The edge of the face f2
 */
 template <class FaceType>
-void FFAttachManifold(FaceType * &f1, int z1, FaceType *&f2, int z2)
+void FFAttachManifold(FaceType * f1, int z1, FaceType * f2, int z2)
 {
   assert(IsBorder<FaceType>(*f1,z1) || f1->FFp(z1)==0);
   assert(IsBorder<FaceType>(*f2,z2) || f2->FFp(z2)==0);
@@ -350,7 +351,7 @@ void FFAttachManifold(FaceType * &f1, int z1, FaceType *&f2, int z2)
 
 // This one should be called only on uniitialized faces.
 template <class FaceType>
-void FFSetBorder(FaceType * &f1, int z1)
+void FFSetBorder(FaceType * f1, int z1)
 {
   assert(f1->FFp(z1)==0 || IsBorder(*f1,z1));
 
@@ -724,15 +725,6 @@ void FlipEdge(FaceType &f, const int z)
     assert( g->V2(w) != f.V1(z) );
     assert( g->V2(w) != f.V2(z) );
 
-	int fi1       = f.FFi(f.Next(z));
-	FaceType* fp1 = f.FFp(f.Next(z));
-
-	int gi1       = g->FFi(g->Next(w));
-	FaceType* gp1 = g->FFp(g->Next(w));
-
-//	FaceType* fp2 = f.FFp(f.Next(z));
-
-
     f.V1(z) = g->V2(w);
     g->V1(w) = f.V2(z);
 
@@ -897,7 +889,7 @@ void VFDetach(FaceType & f, int z)
 
 /// Append a face in VF list of vertex f->V(z)
 template <class FaceType>
-void VFAppend(FaceType* & f, int z)
+void VFAppend(FaceType * f, int z)
 {
     typename FaceType::VertexType *v = f->V(z);
     if (v->VFp()!=0)
@@ -1116,13 +1108,34 @@ void VFExtendedStarVF(typename FaceType::VertexType* vp,
  *
 */
 template <class FaceType>
-void VVOrderedStarFF(Pos<FaceType> &startPos,
+void VVOrderedStarFF(const Pos<FaceType> &startPos,
                      std::vector<typename FaceType::VertexType *> &vertexVec)
 {
   vertexVec.clear();
   vertexVec.reserve(16);
   std::vector<Pos<FaceType> > posVec;
   VFOrderedStarFF(startPos,posVec);
+  for(size_t i=0;i<posVec.size();++i)
+    vertexVec.push_back(posVec[i].VFlip());
+}
+
+/*!
+ * \brief Compute the ordered set of vertices adjacent to a given vertex using FF adiacency
+ *
+ * \param startPos a Pos<FaceType> indicating the vertex whose star has to be computed.
+ * \param vertexVec a std::vector of VertexPtr filled vertices around the given vertex.
+ * \param ccw if true returns the vertexVec in countercounterclockwise order; if false in clockwise order.
+ *
+*/
+template <class FaceType>
+void VVOrderedStarFF(const Pos<FaceType> &startPos,
+                     std::vector<typename FaceType::VertexType *> &vertexVec,
+                     const bool ccw)
+{
+  vertexVec.clear();
+  vertexVec.reserve(16);
+  std::vector<Pos<FaceType> > posVec;
+  VFOrderedStarFF(startPos,posVec,ccw);
   for(size_t i=0;i<posVec.size();++i)
     vertexVec.push_back(posVec[i].VFlip());
 }
@@ -1164,6 +1177,27 @@ void VFOrderedStarFF(const Pos<FaceType> &startPos,
     posVec.erase(posVec.begin(),posVec.begin()+firstBorderInd+1);
     assert(posVec.size()==halfSize);
   }
+}
+
+/*!
+ * \brief Compute the ordered set of faces adjacent to a given vertex using FF adiacency
+ *
+ * \param startPos a Pos<FaceType> indicating the vertex whose star has to be computed.
+ * \param posVec a std::vector of Pos filled with Pos arranged around the passed vertex.
+ * \param ccw if true returns the posVec in countercounterclockwise order; if false in clockwise order.
+ *
+*/
+template <class FaceType>
+void VFOrderedStarFF(const Pos<FaceType> &startPos,
+                     std::vector<Pos<FaceType> > &posVec,
+                     const bool ccw)
+{
+	VFOrderedStarFF(startPos, posVec);
+	const auto & pos = posVec[0];
+	if (ccw != (pos.VFlip() == pos.F()->V(pos.F()->Prev(pos.VInd()))))
+	{
+		std::reverse(posVec.begin(), posVec.end());
+	}
 }
 
 /*!
