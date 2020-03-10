@@ -373,7 +373,8 @@ public:
                 return NULL;
 
             std::vector< Neighbour > neighbors;
-            RetrieveContainedObjects(query_point, distance_functor, max_distance, allow_zero_distance, leaves, neighbors);
+			if (RetrieveContainedObjects(query_point, distance_functor, max_distance, allow_zero_distance, leaves, neighbors) == 0)
+				return NULL;
 
             typename std::vector< Neighbour >::iterator first = neighbors.begin();
             typename std::vector< Neighbour >::iterator last	= neighbors.end();
