@@ -254,8 +254,6 @@ public:
 
         return collapsed;
     }
-private:
-
 
     static bool CollapseBorderSmallEdgesStep(PolyMeshType &poly_m,
                                              const ScalarType edge_limit)
@@ -328,6 +326,7 @@ private:
         return CollapseEdges(poly_m,CollapsePos,InterpPos);
     }
 
+private:
     static void LaplacianPos(PolyMeshType &poly_m,std::vector<CoordType> &AvVert)
     {
         //cumulate step
@@ -1182,6 +1181,85 @@ public:
         vcg::tri::Allocator<PolyMeshType>::CompactEveryVector(poly_m);
 
         vcg::tri::Allocator<PolyMeshType>::DeletePerVertexAttribute(poly_m,valenceVertH);
+    }
+
+    /*! \brief This function remove valence 2 vertices on the border by considering the degree threshold
+     * bacause there could be eventually some corner that should be preserved
+    */
+    static void RemoveParallelVertices(PolyMeshType& poly_m,
+        ScalarType angle_rad)
+    {
+        //update topology
+        vcg::tri::UpdateTopology<PolyMeshType>::FaceFace(poly_m);
+
+        //update border vertices
+        //UpdateBorderVertexFromPFFAdj(poly_m);
+        vcg::tri::UpdateFlags<PolyMeshType>::VertexBorderFromFaceAdj(poly_m);
+
+        vcg::tri::UpdateFlags<PolyMeshType>::VertexClearS(poly_m);
+
+        //select corners
+        for (size_t i = 0; i < poly_m.face.size(); i++)
+        {
+            if (poly_m.face[i].IsD())continue;
+
+            //get vertices of the face
+            int NumV = poly_m.face[i].VN();
+            for (int j = 0; j < NumV; j++)
+            {
+                int edge_0 = j;
+                int edge_1 = (j + NumV - 1) % NumV;
+
+                bool isB_edge0 = face::IsBorder(poly_m.face[i], edge_0);
+                bool isB_edge1 = face::IsBorder(poly_m.face[i], edge_1);
+
+				VertexType* v0 = poly_m.face[i].V((j + NumV - 1) % NumV);
+				VertexType* v1 = poly_m.face[i].V(j);
+				VertexType* v2 = poly_m.face[i].V((j + 1) % NumV);
+
+                // 节点
+                if (isB_edge0 != isB_edge1) {
+					v1->SetS();
+                }
+                else {
+                    double angle = face::WedgeAngleRad(poly_m.face[i], j);
+                    if (fabs(M_PI - angle) > angle_rad) {
+                        v1->SetS();
+                    }
+                }
+            }
+        }
+
+        //then re-elaborate the faces
+        for (size_t i = 0; i < poly_m.face.size(); i++)
+        {
+            if (poly_m.face[i].IsD())continue;
+
+            //get vertices of the face
+            int NumV = poly_m.face[i].VN();
+
+            std::vector<VertexType*> FaceV;
+            for (int j = 0; j < NumV; j++)
+            {
+                VertexType* v = poly_m.face[i].V(j);
+                assert(!v->IsD());
+                if (!v->IsS()) continue;
+                FaceV.push_back(v);
+            }
+
+            //then deallocate face
+            if ((int)FaceV.size() == NumV) continue;
+
+            //otherwise deallocate and set new vertices
+            poly_m.face[i].Dealloc();
+            poly_m.face[i].Alloc(FaceV.size());
+            for (size_t j = 0; j < FaceV.size(); j++)
+                poly_m.face[i].V(j) = FaceV[j];
+        }
+
+        //then remove unreferenced vertices
+        vcg::tri::Clean<PolyMeshType>::RemoveUnreferencedVertex(poly_m);
+        vcg::tri::Allocator<PolyMeshType>::CompactEveryVector(poly_m);
     }
 
     /*! \brief This function collapse small edges which are on the boundary of the mesh
